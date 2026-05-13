@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SpeedGuard Pro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --panel: #111111;
+    --border: #1e1e1e;
+    --safe: #00e676;
+    --warning: #ff6d00;
+    --danger: #ff1744;
+    --text: #e0e0e0;
+    --muted: #555;
+    --accent: #0091ea;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  /* === NORMAL VIEW === */
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding: 0;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .logo {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: #fff;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--danger); }
+
+  .status-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    background: var(--border);
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .status-badge.active { background: #00e67622; color: var(--safe); border: 1px solid #00e67644; }
+  .status-badge.no-gps { background: #ff174422; color: var(--danger); border: 1px solid #ff174444; }
+
+  .main-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 20px;
+    gap: 24px;
+  }
+
+  /* Speedometer */
+  .speedo-wrap {
+    position: relative;
+    width: 240px;
+    height: 240px;
+  }
+
+  .speedo-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-135deg);
+  }
+
+  .speedo-track {
+    fill: none;
+    stroke: #1a1a1a;
+    stroke-width: 14;
+    stroke-linecap: round;
+  }
+
+  .speedo-fill {
+    fill: none;
+    stroke: var(--safe);
+    stroke-width: 14;
+    stroke-linecap: round;
+    stroke-dasharray: 565;
+    stroke-dashoffset: 565;
+    transition: stroke-dashoffset 0.4s ease, stroke 0.3s ease;
+  }
+
+  .speedo-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .speed-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 72px;
+    font-weight: 900;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -2px;
+    transition: color 0.3s;
+  }
+
+  .speed-unit {
+    font-size: 16px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-top: 2px;
+  }
+
+  .threshold-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* Info Grid */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .info-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+
+  .info-card.full { grid-column: 1 / -1; }
+
+  .card-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .card-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .card-value.danger { color: var(--danger); }
+  .card-value.warning { color: var(--warning); }
+  .card-value.safe { color: var(--safe); }
+  .card-value small { font-size: 13px; color: var(--muted); font-weight: 400; }
+
+  /* History */
+  .history-section {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 10px;
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .history-item {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--danger);
+    border-radius: 0 4px 4px 0;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .history-item .hi-speed { color: var(--danger); font-weight: 700; font-size: 16px; }
+  .history-item .hi-dur { color: var(--warning); }
+  .history-item .hi-time { color: var(--muted); font-size: 10px; }
+
+  .empty-history {
+    text-align: center;
+    padding: 20px;
+    color: var(--muted);
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 14px;
+    border: none;
+    border-radius: 3px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-ghost { background: var(--border); color: var(--text); }
+  .btn:disabled { opacity: 0.4; }
+
+  /* === ALERT OVERLAY === */
+  #alert-overlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 9999;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: alertIn 0.2s ease;
+  }
+
+  #alert-overlay.active { display: flex; }
+
+  @keyframes alertIn {
+    from { opacity: 0; transform: scale(1.05); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .alert-stripe {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 40px,
+      rgba(255,23,68,0.04) 40px,
+      rgba(255,23,68,0.04) 80px
+    );
+  }
+
+  .alert-pulse-ring {
+    position: absolute;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,23,68,0.3);
+    animation: pulseRing 1.2s ease-out infinite;
+  }
+
+  @keyframes pulseRing {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  .alert-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px 30px;
+    text-align: center;
+  }
+
+  .alert-icon {
+    font-size: 56px;
+    animation: iconBlink 0.6s ease infinite alternate;
+  }
+
+  @keyframes iconBlink {
+    from { opacity: 1; }
+    to { opacity: 0.5; }
+  }
+
+  .alert-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 5px;
+    color: var(--danger);
+    text-transform: uppercase;
+  }
+
+  .alert-speed {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 110px;
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    letter-spacing: -4px;
+    text-shadow: 0 0 60px rgba(255,23,68,0.8);
+  }
+
+  .alert-unit {
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--danger);
+    letter-spacing: 4px;
+    margin-top: -10px;
+  }
+
+  .alert-timer-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .alert-timer {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--warning);
+    letter-spacing: -1px;
+  }
+
+  .alert-over {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--muted);
+    background: var(--border);
+    padding: 8px 18px;
+    border-radius: 2px;
+  }
+  .alert-over span { color: var(--danger); font-weight: 700; }
+
+  /* GPS permission screen */
+  #permission-screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 40px;
+    text-align: center;
+  }
+  #permission-screen.show { display: flex; }
+
+  .perm-icon { font-size: 64px; }
+  .perm-title { font-size: 28px; font-weight: 900; letter-spacing: 2px; color: #fff; }
+  .perm-desc { font-size: 16px; color: var(--muted); line-height: 1.6; max-width: 300px; }
+
+  /* Scrollbar */
+  .history-list::-webkit-scrollbar { width: 3px; }
+  .history-list::-webkit-scrollbar-track { background: var(--border); }
+  .history-list::-webkit-scrollbar-thumb { background: var(--muted); }
+
+  .vibrate-anim { animation: vibe 0.3s ease infinite; }
+  @keyframes vibe {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- GPS Permission Screen -->
+<div id="permission-screen" class="show">
+  <div class="perm-icon">📍</div>
+  <div class="perm-title">DOSTĘP DO GPS</div>
+  <div class="perm-desc">SpeedGuard Pro wymaga dostępu do lokalizacji w czasie rzeczywistym, aby monitorować prędkość jazdy.</div>
+  <button class="btn btn-primary" style="max-width:280px;width:100%" onclick="requestGPS()">ZEZWÓL NA GPS</button>
+  <button class="btn btn-ghost" style="max-width:280px;width:100%;font-size:13px" onclick="useSimulation()">TRYB DEMONSTRACYJNY</button>
+</div>
+
+<!-- Alert Overlay -->
+<div id="alert-overlay">
+  <div class="alert-stripe"></div>
+  <div class="alert-pulse-ring"></div>
+  <div class="alert-content">
+    <div class="alert-icon">⚠️</div>
+    <div class="alert-title">PRZEKROCZENIE PRĘDKOŚCI</div>
+    <div id="alert-speed" class="alert-speed">--</div>
+    <div class="alert-unit">KM/H</div>
+    <div class="alert-over">Przekroczono o <span id="alert-over-val">--</span> km/h</div>
+    <div class="alert-timer-label">CZAS TRWANIA</div>
+    <div id="alert-timer" class="alert-timer">00:00</div>
+    <div class="alert-timer-label" style="margin-top:8px">NASTĘPNY SYGNAŁ ZA</div>
+    <div id="alert-beep-countdown" class="alert-timer" style="font-size:32px;color:#555">10s</div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app">
+  <header>
+    <div class="logo">Speed<span>Guard</span></div>
+    <div id="status-badge" class="status-badge">BRAK GPS</div>
+  </header>
+
+  <div class="main-panel">
+    <!-- Speedometer -->
+    <div class="speedo-wrap">
+      <svg class="speedo-svg" viewBox="0 0 200 200">
+        <circle class="speedo-track" cx="100" cy="100" r="90" stroke-dasharray="565" stroke-dashoffset="141"/>
+        <circle id="speedo-fill" class="speedo-fill" cx="100" cy="100" r="90" stroke-dasharray="565" stroke-dashoffset="565"/>
+      </svg>
+      <div class="speedo-center">
+        <div id="speed-display" class="speed-value">0</div>
+        <div class="speed-unit">KM/H</div>
+        <div class="threshold-label">PRÓG: 90 KM/H</div>
+      </div>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="card-label">Maks. dzisiaj</div>
+        <div id="max-speed" class="card-value">0 <small>km/h</small></div>
+      </div>
+      <div class="info-card">
+        <div class="card-label">Przekroczenia</div>
+        <div id="violation-count" class="card-value">0</div>
+      </div>
+      <div class="info-card full">
+        <div class="card-label">Łączny czas przekroczeń</div>
+        <div id="total-violation-time" class="card-value safe">00:00:00</div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="history-section">
+      <div class="section-title">Historia przekroczeń</div>
+      <div id="history-list" class="history-list">
+        <div class="empty-history">Brak zarejestrowanych przekroczeń</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-bar">
+    <button id="btn-start" class="btn btn-primary" onclick="startMonitoring()">▶ START</button>
+    <button id="btn-stop" class="btn btn-ghost" onclick="stopMonitoring()" disabled>■ STOP</button>
+    <button class="btn btn-ghost" onclick="clearHistory()" style="flex:0.5;font-size:12px">RESET</button>
+  </div>
+</div>
+
+<script>
+// === AUDIO ===
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playBeep(type) {
+  try {
+    const ctx = getAudioCtx();
+    if (type === 'alert') {
+      // Dwa krótkie wysokie tony — sygnał alarmowy
+      [0, 0.18].forEach(offset => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(1050, ctx.currentTime + offset);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime + offset);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.15);
+        osc.start(ctx.currentTime + offset);
+        osc.stop(ctx.currentTime + offset + 0.15);
+      });
+    } else if (type === 'reminder') {
+      // Jeden krótki sygnał co 10 sekund
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } else if (type === 'end') {
+      // Opadający ton — koniec przekroczenia
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(330, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+    }
+  } catch(e) { console.warn('Audio error:', e); }
+}
+
+// Unlock audio on first user gesture
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try { getAudioCtx().resume(); } catch(e) {}
+}
+document.addEventListener('touchstart', unlockAudio, { once: true });
+document.addEventListener('click', unlockAudio, { once: true });
+
+// === STATE ===
+let watchId = null;
+let isMonitoring = false;
+let isSimulating = false;
+let currentSpeed = 0;
+let maxSpeed = 0;
+let violationCount = 0;
+let totalViolationSeconds = 0;
+let violationStartTime = null;
+let violationActive = false;
+let violationInterval = null;
+let totalInterval = null;
+let beepInterval = null;
+let simInterval = null;
+let simPhase = 0;
+let simTime = 0;
+const THRESHOLD = 90;
+
+const violations = [];
+
+// === DOM ===
+const alertOverlay = document.getElementById('alert-overlay');
+const alertSpeedEl = document.getElementById('alert-speed');
+const alertTimerEl = document.getElementById('alert-timer');
+const alertOverValEl = document.getElementById('alert-over-val');
+const speedDisplay = document.getElementById('speed-display');
+const speedoFill = document.getElementById('speedo-fill');
+const maxSpeedEl = document.getElementById('max-speed');
+const violationCountEl = document.getElementById('violation-count');
+const totalViolationTimeEl = document.getElementById('total-violation-time');
+const historyList = document.getElementById('history-list');
+const statusBadge = document.getElementById('status-badge');
+const btnStart = document.getElementById('btn-start');
+const btnStop = document.getElementById('btn-stop');
+const permScreen = document.getElementById('permission-screen');
+
+// === GPS ===
+function requestGPS() {
+  if (!navigator.geolocation) {
+    alert('Brak obsługi GPS w tej przeglądarce.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    () => {
+      permScreen.classList.remove('show');
+      setStatus('active');
+    },
+    (err) => {
+      if (err.code === 1) {
+        alert('Dostęp do GPS został odmówiony. Włącz lokalizację w ustawieniach.');
+      } else {
+        permScreen.classList.remove('show');
+        setStatus('active');
+      }
+    },
+    { enableHighAccuracy: true }
+  );
+}
+
+function useSimulation() {
+  isSimulating = true;
+  permScreen.classList.remove('show');
+  setStatus('sim');
+}
+
+function setStatus(state) {
+  if (state === 'active') {
+    statusBadge.className = 'status-badge active';
+    statusBadge.textContent = 'GPS AKTYWNY';
+  } else if (state === 'sim') {
+    statusBadge.className = 'status-badge active';
+    statusBadge.textContent = 'DEMONSTRACJA';
+  } else {
+    statusBadge.className = 'status-badge no-gps';
+    statusBadge.textContent = 'BRAK GPS';
+  }
+}
+
+// === MONITORING ===
+function startMonitoring() {
+  if (isMonitoring) return;
+  isMonitoring = true;
+  btnStart.disabled = true;
+  btnStop.disabled = false;
+
+  if (isSimulating) {
+    startSimulation();
+  } else {
+    watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const spd = pos.coords.speed != null ? pos.coords.speed * 3.6 : 0;
+        updateSpeed(Math.round(spd));
+      },
+      (err) => console.warn('GPS error:', err),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+  }
+}
+
+function stopMonitoring() {
+  isMonitoring = false;
+  btnStart.disabled = false;
+  btnStop.disabled = true;
+
+  if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (simInterval) { clearInterval(simInterval); simInterval = null; }
+  if (violationActive) endViolation();
+  updateSpeed(0);
+}
+
+// === SIMULATION ===
+function startSimulation() {
+  simTime = 0;
+  simPhase = 0;
+  simInterval = setInterval(() => {
+    simTime++;
+    // Simulate: 0→60→95→110→80→60→100→85→0
+    const profile = [
+      [15, 0, 60],
+      [20, 60, 95],
+      [10, 95, 112],
+      [15, 112, 80],
+      [10, 80, 60],
+      [12, 60, 105],
+      [10, 105, 84],
+      [10, 84, 0],
+    ];
+    let elapsed = 0;
+    let spd = 0;
+    for (const [dur, from, to] of profile) {
+      if (simTime <= elapsed + dur) {
+        const t = (simTime - elapsed) / dur;
+        spd = Math.round(from + (to - from) * t);
+        break;
+      }
+      elapsed += dur;
+    }
+    if (simTime > elapsed) {
+      // Restart after full cycle
+      simTime = 0;
+    }
+    // Add small noise
+    spd = Math.max(0, spd + Math.round((Math.random() - 0.5) * 4));
+    updateSpeed(spd);
+  }, 500);
+}
+
+// === SPEED UPDATE ===
+function updateSpeed(spd) {
+  currentSpeed = spd;
+
+  // Update display
+  speedDisplay.textContent = spd;
+
+  // Update speedometer arc (0-160 range → 0-424 dashoffset reduction)
+  const maxVisual = 160;
+  const arcLength = 424; // 75% of 565
+  const filled = Math.min(spd / maxVisual, 1) * arcLength;
+  speedoFill.style.strokeDashoffset = (565 - filled).toFixed(1);
+
+  // Color
+  if (spd > THRESHOLD) {
+    speedoFill.style.stroke = '#ff1744';
+    speedDisplay.style.color = '#ff1744';
+  } else if (spd > 75) {
+    speedoFill.style.stroke = '#ff6d00';
+    speedDisplay.style.color = '#ff6d00';
+  } else {
+    speedoFill.style.stroke = '#00e676';
+    speedDisplay.style.color = '#ffffff';
+  }
+
+  // Max
+  if (spd > maxSpeed) {
+    maxSpeed = spd;
+    maxSpeedEl.textContent = spd;
+    maxSpeedEl.innerHTML = spd + ' <small>km/h</small>';
+    if (spd > THRESHOLD) maxSpeedEl.className = 'card-value danger';
+    else maxSpeedEl.className = 'card-value';
+  }
+
+  // Violation logic
+  if (spd > THRESHOLD) {
+    if (!violationActive) startViolation();
+    updateAlertDisplay(spd);
+  } else {
+    if (violationActive) endViolation();
+    hideAlert();
+  }
+}
+
+function startViolation() {
+  violationActive = true;
+  violationStartTime = Date.now();
+  violationCount++;
+  violationCountEl.textContent = violationCount;
+  violationCountEl.className = 'card-value danger';
+
+  showAlert();
+
+  // Sygnał alarmowy przy przekroczeniu
+  playBeep('alert');
+
+  // Timer (odświeża co 200ms)
+  violationInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - violationStartTime) / 1000);
+    alertTimerEl.textContent = formatTime(elapsed);
+  }, 200);
+
+  // Sygnał co 10 sekund + łączny czas
+  if (!totalInterval) {
+    totalInterval = setInterval(() => {
+      if (violationActive) {
+        totalViolationSeconds++;
+        totalViolationTimeEl.textContent = formatTime(totalViolationSeconds);
+        // Beep co 10 sekund
+        const secsInCycle = 10 - (totalViolationSeconds % 10);
+        const countdown = document.getElementById('alert-beep-countdown');
+        if (countdown) {
+          countdown.textContent = secsInCycle + 's';
+          countdown.style.color = secsInCycle <= 3 ? '#ff6d00' : '#555';
+        }
+        if (totalViolationSeconds % 10 === 0) {
+          playBeep('reminder');
+          if (navigator.vibrate) navigator.vibrate(80);
+        }
+      }
+    }, 1000);
+  }
+
+  // Wibracja startowa
+  if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 300]);
+
+  // Wake lock
+  requestWakeLock();
+}
+
+function endViolation() {
+  if (!violationActive) return;
+  violationActive = false;
+  const elapsed = Math.floor((Date.now() - violationStartTime) / 1000);
+  clearInterval(violationInterval);
+  violationInterval = null;
+
+  // Sygnał końca przekroczenia
+  playBeep('end');
+
+  // Save to history
+  violations.unshift({
+    speed: currentSpeed,
+    maxSpeed: Math.max(...violations.map(v => v.speed), currentSpeed),
+    duration: elapsed,
+    time: new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })
+  });
+
+  renderHistory();
+}
+
+function showAlert() {
+  alertOverlay.classList.add('active');
+  document.body.style.background = '#000';
+}
+
+function hideAlert() {
+  alertOverlay.classList.remove('active');
+}
+
+function updateAlertDisplay(spd) {
+  alertSpeedEl.textContent = spd;
+  alertOverValEl.textContent = (spd - THRESHOLD).toFixed(0);
+}
+
+// === HISTORY ===
+function renderHistory() {
+  if (violations.length === 0) {
+    historyList.innerHTML = '<div class="empty-history">Brak zarejestrowanych przekroczeń</div>';
+    return;
+  }
+  historyList.innerHTML = violations.slice(0, 10).map(v => `
+    <div class="history-item">
+      <div>
+        <div class="hi-speed">${v.speed} km/h</div>
+        <div class="hi-time">${v.time}</div>
+      </div>
+      <div class="hi-dur">${formatTime(v.duration)}</div>
+    </div>
+  `).join('');
+}
+
+function clearHistory() {
+  violations.length = 0;
+  violationCount = 0;
+  maxSpeed = 0;
+  totalViolationSeconds = 0;
+  clearInterval(totalInterval);
+  totalInterval = null;
+  violationCountEl.textContent = '0';
+  violationCountEl.className = 'card-value';
+  maxSpeedEl.innerHTML = '0 <small>km/h</small>';
+  maxSpeedEl.className = 'card-value';
+  totalViolationTimeEl.textContent = '00:00:00';
+  renderHistory();
+}
+
+// === UTILS ===
+function formatTime(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+  return `${pad(m)}:${pad(sec)}`;
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+
+// Wake Lock API
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch {}
+}
+
+// Keep wake lock on visibility change
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible' && violationActive) {
+    await requestWakeLock();
+  }
+});
+
+// Prevent screen sleep during violation (click on alert)
+alertOverlay.addEventListener('click', () => {
+  if (navigator.vibrate) navigator.vibrate(50);
+});
+</script>
+</body>
+</html>
