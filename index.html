@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>SpeedGuard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+  :root{--bg:#0a0a0a;--panel:#111;--border:#222;--safe:#00e676;--warn:#ff6d00;--danger:#ff1744;--muted:#444;--accent:#0091ea;}
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{background:var(--bg);color:#e0e0e0;font-family:'Barlow Condensed',sans-serif;height:100dvh;overflow:hidden;user-select:none;}
+
+  /* FLASHING BACKGROUND */
+  @keyframes flashBg{0%,49%{background:#330000;}50%,100%{background:#0a0a0a;}}
+  body.flashing{animation:flashBg 1s step-start infinite;}
+
+  /* SPLASH — shown while waiting for GPS permission */
+  #splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;z-index:200;transition:opacity 0.4s;}
+  #splash.hide{opacity:0;pointer-events:none;}
+  #splash .icon{font-size:52px;}
+  #splash h1{font-size:20px;font-weight:900;letter-spacing:3px;color:#fff;}
+  #splash p{font-size:13px;color:var(--muted);line-height:1.6;max-width:260px;}
+  #splash .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  #splash .err-btn{padding:12px 24px;background:var(--accent);border:none;border-radius:3px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;cursor:pointer;display:none;}
+
+  /* APP */
+  #app{height:100dvh;display:flex;flex-direction:column;}
+
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+  .logo{font-size:15px;font-weight:900;letter-spacing:2px;color:#fff;}
+  .logo span{color:var(--danger);}
+  .badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 7px;border-radius:2px;background:var(--border);color:var(--muted);letter-spacing:1px;}
+  .badge.on{background:#00e67618;color:var(--safe);border:1px solid #00e67633;}
+  .badge.err{background:#ff174418;color:var(--danger);border:1px solid #ff174433;}
+
+  /* THRESHOLD ROW */
+  .thr-row{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+  .thr-label{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
+  .thr-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:#e0e0e0;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .thr-btn:active{background:var(--border);}
+  .thr-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:#fff;min-width:44px;text-align:center;}
+  .thr-unit{font-size:10px;color:var(--muted);letter-spacing:1px;}
+  .thr-spacer{flex:1;}
+  .thr-input-wrap{display:flex;align-items:center;gap:4px;}
+  input[type=number].thr-input{width:58px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:#fff;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;padding:4px 6px;text-align:center;-moz-appearance:textfield;}
+  input[type=number].thr-input::-webkit-outer-spin-button,
+  input[type=number].thr-input::-webkit-inner-spin-button{-webkit-appearance:none;}
+  .thr-set-btn{padding:4px 10px;background:var(--accent);border:none;border-radius:3px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;}
+
+  /* MAIN ROW */
+  .main-row{display:flex;gap:8px;padding:8px 10px 6px;flex-shrink:0;}
+  .box{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;}
+  .box-label{font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+  .box-val{font-family:'JetBrains Mono',monospace;font-size:46px;font-weight:700;line-height:1;color:#fff;transition:color 0.2s;}
+  .box-val.d{color:var(--danger);}
+  .box-val.w{color:var(--warn);}
+  .box-unit{font-size:10px;color:var(--muted);letter-spacing:2px;margin-top:2px;}
+  .box-hint{font-size:10px;color:var(--muted);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+  .box-hint.soon{color:var(--warn);}
+
+  /* STATUS STRIP */
+  .strip{margin:0 10px 6px;background:#ff174410;border:1px solid #ff174430;border-radius:3px;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;opacity:0;transition:opacity 0.3s;}
+  .strip.on{opacity:1;}
+  .strip-l{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--danger);}
+  .strip-over{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--danger);font-weight:700;}
+  .strip-beep{font-size:9px;color:var(--muted);letter-spacing:1px;}
+  .strip-beep.soon{color:var(--warn);}
+
+  /* HISTORY */
+  .hist-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 10px;min-height:0;}
+  .hist-title{font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;padding:5px 0;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .hist-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 0;}
+  .hist-list::-webkit-scrollbar{width:2px;}
+  .hist-list::-webkit-scrollbar-thumb{background:var(--border);}
+  .hist-item{background:var(--panel);border-left:2px solid var(--danger);padding:5px 8px;display:flex;justify-content:space-between;align-items:center;border-radius:0 3px 3px 0;font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .hi-s{color:var(--danger);font-weight:700;font-size:13px;}
+  .hi-t{color:var(--muted);font-size:9px;}
+  .hi-d{color:var(--warn);}
+  .hist-empty{text-align:center;padding:14px;color:var(--muted);font-size:11px;letter-spacing:1px;}
+
+  /* BOTTOM */
+  .botbar{display:flex;gap:6px;padding:7px 10px;background:var(--panel);border-top:1px solid var(--border);flex-shrink:0;}
+  .btn{flex:1;padding:10px 0;border:none;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:transform 0.1s;}
+  .btn:active{transform:scale(0.96);}
+  .btn-rst{background:var(--border);color:#e0e0e0;}
+</style>
+</head>
+<body>
+
+<!-- Splash screen — auto-hides after GPS connects -->
+<div id="splash">
+  <div class="icon">📍</div>
+  <h1>SPEEDGUARD</h1>
+  <p id="splash-msg">Łączenie z GPS...</p>
+  <div id="splash-spinner" class="spinner"></div>
+  <button id="splash-btn" class="err-btn" onclick="retryGPS()">SPRÓBUJ PONOWNIE</button>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="logo">Speed<span>Guard</span></div>
+    <div id="badge" class="badge">ŁĄCZENIE</div>
+  </div>
+
+  <div class="thr-row">
+    <div class="thr-label">Próg:</div>
+    <button class="thr-btn" onclick="adjThr(-1)">−</button>
+    <div id="thr-disp" class="thr-val">90</div>
+    <div class="thr-unit">km/h</div>
+    <button class="thr-btn" onclick="adjThr(+1)">+</button>
+    <div class="thr-spacer"></div>
+    <div class="thr-input-wrap">
+      <input type="number" class="thr-input" id="thr-inp" placeholder="np. 87" min="50" max="130">
+      <button class="thr-set-btn" onclick="setThrManual()">USTAW</button>
+    </div>
+  </div>
+
+  <div class="main-row">
+    <div class="box">
+      <div class="box-label">Prędkość GPS</div>
+      <div id="spd" class="box-val">0</div>
+      <div class="box-unit">KM/H</div>
+      <div class="box-hint">próg <span id="thr-hint">90</span></div>
+    </div>
+    <div class="box">
+      <div class="box-label">Czas przekroczenia</div>
+      <div id="timer" class="box-val">00:00</div>
+      <div class="box-unit">MM:SS</div>
+      <div id="bcd" class="box-hint">–</div>
+    </div>
+  </div>
+
+  <div id="strip" class="strip">
+    <div class="strip-l">⚠ PRZEKROCZENIE</div>
+    <div id="s-over" class="strip-over">+0</div>
+    <div id="s-beep" class="strip-beep">sygnał za 10s</div>
+  </div>
+
+  <div class="hist-wrap">
+    <div class="hist-title">Historia przekroczeń</div>
+    <div id="hist" class="hist-list"><div class="hist-empty">Brak przekroczeń</div></div>
+  </div>
+
+  <div class="botbar">
+    <button class="btn btn-rst" onclick="resetAll()">WYCZYŚĆ HISTORIĘ</button>
+  </div>
+</div>
+
+<script>
+// ── AUDIO ──
+let actx=null;
+function ac(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();return actx;}
+
+function beepN(n,freq,type){
+  try{
+    const c=ac();
+    for(let i=0;i<n;i++){
+      const o=i*0.22,os=c.createOscillator(),g=c.createGain();
+      os.connect(g);g.connect(c.destination);
+      os.type=type||'sine';os.frequency.value=freq||880;
+      g.gain.setValueAtTime(0.4,c.currentTime+o);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+o+0.15);
+      os.start(c.currentTime+o);os.stop(c.currentTime+o+0.16);
+    }
+  }catch(e){}
+}
+
+function beepAlert(){
+  try{
+    const c=ac();
+    [0,0.22].forEach(o=>{
+      const os=c.createOscillator(),g=c.createGain();
+      os.connect(g);g.connect(c.destination);
+      os.type='square';os.frequency.value=1100;
+      g.gain.setValueAtTime(0.45,c.currentTime+o);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+o+0.15);
+      os.start(c.currentTime+o);os.stop(c.currentTime+o+0.16);
+    });
+  }catch(e){}
+}
+
+function beepEnd(){
+  try{
+    const c=ac();
+    const os=c.createOscillator(),g=c.createGain();
+    os.connect(g);g.connect(c.destination);
+    os.type='sine';
+    os.frequency.setValueAtTime(660,c.currentTime);
+    os.frequency.linearRampToValueAtTime(330,c.currentTime+0.4);
+    g.gain.setValueAtTime(0.3,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.4);
+    os.start(c.currentTime);os.stop(c.currentTime+0.41);
+  }catch(e){}
+}
+
+// Unlock audio on first touch
+let aReady=false;
+function unlockA(){if(aReady)return;aReady=true;try{ac().resume();}catch(e){}}
+document.addEventListener('touchstart',unlockA,{once:true});
+document.addEventListener('click',unlockA,{once:true});
+
+// ── THRESHOLD ──
+let THR=90;
+function adjThr(d){THR=Math.max(50,Math.min(130,THR+d));updateThrDisplay();}
+function setThrManual(){
+  const v=parseInt(document.getElementById('thr-inp').value);
+  if(!isNaN(v)&&v>=50&&v<=130){THR=v;updateThrDisplay();document.getElementById('thr-inp').value='';}
+  else alert('Wpisz wartość między 50 a 130 km/h');
+}
+function updateThrDisplay(){
+  document.getElementById('thr-disp').textContent=THR;
+  document.getElementById('thr-hint').textContent=THR;
+}
+
+// ── STATE ──
+let watchId=null;
+let vActive=false,vStart=null;
+let vDisplayInt=null,tickWorker=null,tickSecs=0;
+const hist=[];
+let wl=null;
+
+// ── DOM ──
+const splashEl=document.getElementById('splash');
+const splashMsg=document.getElementById('splash-msg');
+const splashSpinner=document.getElementById('splash-spinner');
+const splashBtn=document.getElementById('splash-btn');
+const badgeEl=document.getElementById('badge');
+const spdEl=document.getElementById('spd');
+const timerEl=document.getElementById('timer');
+const bcdEl=document.getElementById('bcd');
+const stripEl=document.getElementById('strip');
+const sOverEl=document.getElementById('s-over');
+const sBeepEl=document.getElementById('s-beep');
+const histEl=document.getElementById('hist');
+
+// ── AUTO GPS START ──
+function startGPS(){
+  if(!navigator.geolocation){
+    showSplashError('Przeglądarka nie obsługuje GPS.');
+    return;
+  }
+  splashMsg.textContent='Łączenie z GPS...';
+  splashSpinner.style.display='block';
+  splashBtn.style.display='none';
+
+  watchId=navigator.geolocation.watchPosition(
+    p=>{
+      // First fix — hide splash
+      if(!splashEl.classList.contains('hide')){
+        splashEl.classList.add('hide');
+        setTimeout(()=>splashEl.style.display='none',400);
+        setBadge('on');
+        unlockA(); // try to unlock audio on first GPS event
+      }
+      const s=p.coords.speed!=null?p.coords.speed*3.6:0;
+      updateSpd(Math.round(s));
+    },
+    e=>{
+      if(e.code===1){
+        showSplashError('Brak dostępu do GPS.\nChrome → Ustawienia witryn → Lokalizacja → Zezwól, a następnie odśwież stronę.');
+      } else {
+        // Timeout or other error — keep trying, show message
+        splashMsg.textContent='Szukanie sygnału GPS...';
+      }
+    },
+    {enableHighAccuracy:true,maximumAge:0,timeout:10000}
+  );
+}
+
+function showSplashError(msg){
+  splashMsg.textContent=msg;
+  splashSpinner.style.display='none';
+  splashBtn.style.display='block';
+  setBadge('err');
+}
+
+function retryGPS(){
+  if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  startGPS();
+}
+
+function setBadge(s){
+  badgeEl.className='badge'+(s==='on'?' on':s==='err'?' err':'');
+  badgeEl.textContent=s==='on'?'GPS OK':s==='err'?'BRAK GPS':'ŁĄCZENIE';
+}
+
+// ── SPEED ──
+function updateSpd(spd){
+  spdEl.textContent=spd;
+  spdEl.className='box-val'+(spd>THR?' d':spd>(THR-15)?' w':'');
+  if(spd>THR){
+    if(!vActive)startV();
+    sOverEl.textContent='+'+(spd-THR)+' km/h';
+  }else{
+    if(vActive)endV();
+  }
+}
+
+// ── VIOLATION ──
+function startV(){
+  vActive=true;vStart=Date.now();tickSecs=0;
+  stripEl.classList.add('on');
+  beepAlert();
+  if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
+  document.body.classList.add('flashing');
+  reqWL();
+
+  vDisplayInt=setInterval(()=>{
+    const e=Math.floor((Date.now()-vStart)/1000);
+    timerEl.textContent=fmt(e);
+    timerEl.className='box-val d';
+  },200);
+
+  tickWorker=setInterval(()=>{
+    tickSecs++;
+    const cd=10-(tickSecs%10);
+    bcdEl.textContent='sygnał za '+cd+'s';
+    bcdEl.className='box-hint'+(cd<=3?' soon':'');
+    sBeepEl.textContent='sygnał za '+cd+'s';
+    sBeepEl.className='strip-beep'+(cd<=3?' soon':'');
+    if(tickSecs%10===0){
+      const n=tickSecs/10;
+      beepN(n,880,'sine');
+      if(navigator.vibrate)navigator.vibrate(Array(n).fill([80,80]).flat());
+    }
+  },1000);
+}
+
+function endV(){
+  if(!vActive)return;
+  vActive=false;
+  const elapsed=Math.floor((Date.now()-vStart)/1000);
+  clearInterval(vDisplayInt);vDisplayInt=null;
+  clearInterval(tickWorker);tickWorker=null;
+  beepEnd();
+  document.body.classList.remove('flashing');
+  stripEl.classList.remove('on');
+  timerEl.textContent='00:00';timerEl.className='box-val';
+  bcdEl.textContent='–';bcdEl.className='box-hint';
+  sBeepEl.textContent='sygnał za 10s';sBeepEl.className='strip-beep';
+  hist.unshift({spd:parseInt(spdEl.textContent)||0,thr:THR,dur:elapsed,time:new Date().toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})});
+  renderH();
+}
+
+function renderH(){
+  if(!hist.length){histEl.innerHTML='<div class="hist-empty">Brak przekroczeń</div>';return;}
+  histEl.innerHTML=hist.slice(0,15).map(h=>`
+    <div class="hist-item">
+      <div><div class="hi-s">${h.spd} km/h</div><div class="hi-t">${h.time} · próg ${h.thr}</div></div>
+      <div class="hi-d">${fmt(h.dur)}</div>
+    </div>`).join('');
+}
+
+function resetAll(){
+  hist.length=0;
+  timerEl.textContent='00:00';timerEl.className='box-val';
+  bcdEl.textContent='–';
+  spdEl.textContent='0';spdEl.className='box-val';
+  renderH();
+}
+
+function fmt(s){return pad(Math.floor(s/60))+':'+pad(s%60);}
+function pad(n){return String(n).padStart(2,'0');}
+
+async function reqWL(){try{if('wakeLock'in navigator)wl=await navigator.wakeLock.request('screen');}catch(e){}}
+document.addEventListener('visibilitychange',async()=>{if(wl&&document.visibilityState==='visible'&&vActive)await reqWL();});
+
+// ── AUTO START ──
+startGPS();
+</script>
+</body>
+</html>
