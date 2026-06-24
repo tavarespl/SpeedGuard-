@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>SpeedGuard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+:root{--bg:#0a0a0a;--panel:#111;--border:#222;--safe:#00e676;--warn:#ff6d00;--danger:#ff1744;--muted:#444;--accent:#0091ea;}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:#e0e0e0;font-family:'Barlow Condensed',sans-serif;height:100dvh;overflow:hidden;user-select:none;}
+
+/* FLASH BOX */
+@keyframes flashBg{0%,49%{background:#330000;}50%,100%{background:#0a0a0a;}}
+body.flashing{animation:flashBg 1s step-start infinite;}
+@keyframes flashBox{0%,49%{background:#ff1744;border-color:#ff1744;}50%,100%{background:#111;border-color:#222;}}
+@keyframes flashVal{0%,49%{color:#fff;}50%,100%{color:#ff1744;}}
+@keyframes flashUnit{0%,49%{color:#ff000088;}50%,100%{color:#444;}}
+body.flashing .box{animation:flashBox 1s step-start infinite;}
+body.flashing .box-val{animation:flashVal 1s step-start infinite;}
+body.flashing .box-unit{animation:flashUnit 1s step-start infinite;}
+body.flashing .box-label{animation:flashUnit 1s step-start infinite;}
+body.flashing .box-hint{animation:flashUnit 1s step-start infinite;}
+
+/* ALARM FLASH OVERLAY — covers entire viewport including split screen chrome */
+#flash-overlay{
+  position:fixed;inset:0;z-index:999999;pointer-events:none;
+  background:#ff1744;opacity:0;
+  /* Use mix-blend-mode so it affects everything */
+}
+@keyframes alarmFlash{0%,49%{opacity:0.92;}50%,100%{opacity:0;}}
+#flash-overlay.alarm{animation:alarmFlash 0.5s step-start infinite;}
+
+/* SPLASH */
+#splash{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;z-index:300;transition:opacity 0.4s;}
+#splash.hide{opacity:0;pointer-events:none;}
+#splash .icon{font-size:48px;}
+#splash h1{font-size:20px;font-weight:900;letter-spacing:3px;color:#fff;}
+#splash p{font-size:13px;color:var(--muted);line-height:1.6;max-width:260px;}
+#splash .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#splash .err-btn{padding:11px 22px;background:var(--accent);border:none;border-radius:3px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;cursor:pointer;display:none;}
+
+/* SETTINGS PANEL */
+#settings{position:fixed;inset:0;background:#0a0a0af0;z-index:200;display:none;flex-direction:column;overflow-y:auto;}
+#settings.open{display:flex;}
+.set-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:0;z-index:1;}
+.set-title{font-size:16px;font-weight:900;letter-spacing:2px;color:#fff;}
+.set-close{width:32px;height:32px;background:var(--border);border:none;border-radius:3px;color:#e0e0e0;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.set-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px;padding-bottom:40px;}
+.set-section{background:var(--panel);border:1px solid var(--border);border-radius:4px;overflow:hidden;}
+.set-section-title{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--border);background:#0d0d0d;}
+.set-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #1a1a1a;}
+.set-row:last-child{border-bottom:none;}
+.set-row-label{flex:1;font-size:13px;font-weight:600;letter-spacing:1px;color:#ccc;}
+.set-row-sub{font-size:10px;color:var(--muted);letter-spacing:0;font-weight:400;display:block;margin-top:2px;line-height:1.4;}
+
+/* Toggle */
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:12px;cursor:pointer;transition:background 0.2s;}
+.toggle input:checked+.toggle-slider{background:var(--accent);}
+.toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform 0.2s;}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);}
+
+/* Stepper */
+.stepper{display:flex;align-items:center;gap:5px;}
+.stp-btn{width:30px;height:30px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:#e0e0e0;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.stp-btn:active{background:var(--border);}
+.stp-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:#fff;min-width:38px;text-align:center;}
+.stp-unit{font-size:10px;color:var(--muted);}
+
+/* Sound picker */
+.sound-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 12px;}
+.sound-btn{padding:8px 4px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;text-align:center;}
+.sound-btn.sel{border-color:var(--accent);color:var(--accent);background:#0091ea18;}
+.sound-btn:active{background:var(--border);}
+
+/* Sync banner */
+.sync-box{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#0091ea12;border:1px solid #0091ea33;border-radius:4px;}
+.sync-box-label{flex:1;font-size:13px;font-weight:700;letter-spacing:1px;color:var(--accent);}
+.sync-sub{font-size:10px;color:#0091ea99;display:block;margin-top:2px;}
+.sync-stepper{display:flex;align-items:center;gap:5px;}
+
+/* APP */
+#app{height:100dvh;display:flex;flex-direction:column;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+.logo{font-size:15px;font-weight:900;letter-spacing:2px;color:#fff;}
+.logo span{color:var(--danger);}
+.topright{display:flex;align-items:center;gap:8px;}
+.badge{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 7px;border-radius:2px;background:var(--border);color:var(--muted);letter-spacing:1px;}
+.badge.on{background:#00e67618;color:var(--safe);border:1px solid #00e67633;}
+.badge.err{background:#ff174418;color:var(--danger);border:1px solid #ff174433;}
+.set-gear{width:30px;height:30px;background:var(--border);border:none;border-radius:3px;color:#e0e0e0;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* THRESHOLD ROW */
+.thr-row{display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;}
+.thr-label{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;white-space:nowrap;}
+.thr-btn{width:26px;height:26px;border:1px solid var(--border);border-radius:3px;background:var(--bg);color:#e0e0e0;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.thr-btn:active{background:var(--border);}
+.thr-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;color:#fff;min-width:40px;text-align:center;}
+.thr-unit{font-size:10px;color:var(--muted);letter-spacing:1px;}
+.thr-spacer{flex:1;}
+.thr-input-wrap{display:flex;align-items:center;gap:4px;}
+input[type=number].thr-input{width:52px;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:#fff;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;padding:4px 5px;text-align:center;-moz-appearance:textfield;}
+input[type=number].thr-input::-webkit-outer-spin-button,
+input[type=number].thr-input::-webkit-inner-spin-button{-webkit-appearance:none;}
+.thr-set-btn{padding:4px 8px;background:var(--accent);border:none;border-radius:3px;color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;}
+
+/* MAIN ROW */
+.main-row{display:flex;gap:8px;padding:8px 10px 5px;flex-shrink:0;}
+.box{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 6px;}
+.box-label{font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+.box-val{font-family:'JetBrains Mono',monospace;font-size:46px;font-weight:700;line-height:1;color:#fff;transition:color 0.2s;}
+.box-val.d{color:var(--danger);}
+.box-val.w{color:var(--warn);}
+.box-unit{font-size:10px;color:var(--muted);letter-spacing:2px;margin-top:2px;}
+.box-hint{font-size:10px;color:var(--muted);margin-top:3px;font-family:'JetBrains Mono',monospace;}
+.box-hint.soon{color:var(--warn);}
+
+/* PENDING STRIP */
+.pending-strip{margin:0 10px 4px;background:#ff6d0015;border:1px solid #ff6d0040;border-radius:3px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;opacity:0;transition:opacity 0.2s;}
+.pending-strip.on{opacity:1;}
+.pending-label{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--warn);}
+.pending-cd{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--warn);}
+
+/* STATUS STRIP */
+.strip{margin:0 10px 5px;background:#ff174410;border:1px solid #ff174430;border-radius:3px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;opacity:0;transition:opacity 0.3s;}
+.strip.on{opacity:1;}
+.strip-l{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--danger);}
+.strip-over{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--danger);font-weight:700;}
+.strip-beep{font-size:9px;color:var(--muted);letter-spacing:1px;}
+.strip-beep.soon{color:var(--warn);}
+
+/* HISTORY */
+.hist-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column;padding:0 10px;min-height:0;}
+.hist-title{font-size:8px;font-weight:700;letter-spacing:2px;color:var(--muted);text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--border);flex-shrink:0;}
+.hist-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding:4px 0;}
+.hist-list::-webkit-scrollbar{width:2px;}
+.hist-list::-webkit-scrollbar-thumb{background:var(--border);}
+.hist-item{background:var(--panel);border-left:2px solid var(--danger);padding:4px 8px;display:flex;justify-content:space-between;align-items:center;border-radius:0 3px 3px 0;font-family:'JetBrains Mono',monospace;font-size:11px;}
+.hi-s{color:var(--danger);font-weight:700;font-size:13px;}
+.hi-t{color:var(--muted);font-size:9px;}
+.hi-d{color:var(--warn);}
+.hist-empty{text-align:center;padding:14px;color:var(--muted);font-size:11px;letter-spacing:1px;}
+
+/* BOTTOM */
+.botbar{display:flex;gap:6px;padding:6px 10px;background:var(--panel);border-top:1px solid var(--border);flex-shrink:0;}
+.btn{flex:1;padding:9px 0;border:none;border-radius:3px;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:transform 0.1s;}
+.btn:active{transform:scale(0.96);}
+.btn-rst{background:var(--border);color:#e0e0e0;}
+</style>
+</head>
+<body>
+
+<div id="flash-overlay"></div>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="icon">📍</div>
+  <h1>SPEEDGUARD</h1>
+  <p id="splash-msg">Łączenie z GPS...</p>
+  <div id="splash-spinner" class="spinner"></div>
+  <button id="splash-btn" class="err-btn" onclick="retryGPS()">SPRÓBUJ PONOWNIE</button>
+</div>
+
+<!-- SETTINGS PANEL -->
+<div id="settings">
+  <div class="set-header">
+    <div class="set-title">⚙ USTAWIENIA</div>
+    <button class="set-close" onclick="closeSettings()">✕</button>
+  </div>
+  <div class="set-body">
+
+    <!-- SYNC -->
+    <div class="sync-box">
+      <div style="flex:1">
+        <div class="sync-box-label">🔗 SYNCHRONIZACJA</div>
+        <span class="sync-sub">Jeden timer dla alarmu dźwiękowego, migania ekranu i latarki</span>
+      </div>
+      <label class="toggle"><input type="checkbox" id="tog-sync" onchange="onSyncChange()"><span class="toggle-slider"></span></label>
+    </div>
+    <div id="sync-row" class="set-section" style="display:none">
+      <div class="set-section-title">WSPÓLNY CZAS (SYNC)</div>
+      <div class="set-row">
+        <div class="set-row-label">Alarm po<span class="set-row-sub">Dotyczy wszystkich 3 funkcji</span></div>
+        <div class="stepper">
+          <button class="stp-btn" onclick="adjSync(-5)">−</button>
+          <div id="sync-val" class="stp-val">50</div>
+          <button class="stp-btn" onclick="adjSync(+5)">+</button>
+          <span class="stp-unit">s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANTI-FAKE -->
+    <div class="set-section">
+      <div class="set-section-title">1 — OPÓŹNIENIE ALARMU (ANTY-FAKE)</div>
+      <div class="set-row">
+        <div class="set-row-label">Włączone<span class="set-row-sub">Ignoruje przekroczenia krótsze niż X sekund</span></div>
+        <label class="toggle"><input type="checkbox" id="tog-af" onchange="saveSets()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="set-row">
+        <div class="set-row-label">Opóźnienie</div>
+        <div class="stepper">
+          <button class="stp-btn" onclick="adjAf(-1)">−</button>
+          <div id="af-val" class="stp-val">2</div>
+          <button class="stp-btn" onclick="adjAf(+1)">+</button>
+          <span class="stp-unit">s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALARM SOUND -->
+    <div class="set-section">
+      <div class="set-section-title">2 — ALARM DŹWIĘKOWY PO CZASIE</div>
+      <div class="set-row">
+        <div class="set-row-label">Włączony<span class="set-row-sub">Głośny alarm co 2s po upływie czasu</span></div>
+        <label class="toggle"><input type="checkbox" id="tog-at" onchange="saveSets()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="set-row" id="at-time-row">
+        <div class="set-row-label">Alarm po</div>
+        <div class="stepper">
+          <button class="stp-btn" onclick="adjAt(-5)">−</button>
+          <div id="at-val" class="stp-val">50</div>
+          <button class="stp-btn" onclick="adjAt(+5)">+</button>
+          <span class="stp-unit">s</span>
+        </div>
+      </div>
+      <div class="set-section-title" style="border-top:1px solid var(--border)">DŹWIĘK ALARMU</div>
+      <div class="sound-grid">
+        <button class="sound-btn sel" data-snd="0" onclick="selSound(0)">📯 SYRENA</button>
+        <button class="sound-btn" data-snd="1" onclick="selSound(1)">🔔 DZWONEK</button>
+        <button class="sound-btn" data-snd="2" onclick="selSound(2)">🚨 TI-DU</button>
+        <button class="sound-btn" data-snd="3" onclick="selSound(3)">⚡ PULS</button>
+      </div>
+    </div>
+
+    <!-- SCREEN FLASH -->
+    <div class="set-section">
+      <div class="set-section-title">3 — MIGANIE EKRANU PO CZASIE</div>
+      <div class="set-row">
+        <div class="set-row-label">Włączone<span class="set-row-sub">Intensywne czerwone błyski całego ekranu</span></div>
+        <label class="toggle"><input type="checkbox" id="tog-sf" onchange="saveSets()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="set-row" id="sf-time-row">
+        <div class="set-row-label">Miganie po</div>
+        <div class="stepper">
+          <button class="stp-btn" onclick="adjSf(-5)">−</button>
+          <div id="sf-val" class="stp-val">50</div>
+          <button class="stp-btn" onclick="adjSf(+5)">+</button>
+          <span class="stp-unit">s</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TORCH -->
+    <div class="set-section">
+      <div class="set-section-title">4 — LATARKA PO CZASIE</div>
+      <div class="set-row">
+        <div class="set-row-label">Włączona<span class="set-row-sub">Miga latarką telefonu — wyłącz w nocy!</span></div>
+        <label class="toggle"><input type="checkbox" id="tog-tor" onchange="saveSets()"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="set-row" id="tor-time-row">
+        <div class="set-row-label">Latarka po</div>
+        <div class="stepper">
+          <button class="stp-btn" onclick="adjTor(-5)">−</button>
+          <div id="tor-val" class="stp-val">50</div>
+          <button class="stp-btn" onclick="adjTor(+5)">+</button>
+          <span class="stp-unit">s</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <div class="topbar">
+    <div class="logo">Speed<span>Guard</span></div>
+    <div class="topright">
+      <div id="badge" class="badge">ŁĄCZENIE</div>
+      <button class="set-gear" onclick="openSettings()">⚙</button>
+    </div>
+  </div>
+
+  <div class="thr-row">
+    <div class="thr-label">Próg:</div>
+    <button class="thr-btn" onclick="adjThr(-1)">−</button>
+    <div id="thr-disp" class="thr-val">90</div>
+    <div class="thr-unit">km/h</div>
+    <button class="thr-btn" onclick="adjThr(+1)">+</button>
+    <div class="thr-spacer"></div>
+    <div class="thr-input-wrap">
+      <input type="number" class="thr-input" id="thr-inp" placeholder="87" min="50" max="130">
+      <button class="thr-set-btn" onclick="setThrManual()">USTAW</button>
+    </div>
+  </div>
+
+  <div class="main-row">
+    <div class="box">
+      <div class="box-label">Prędkość GPS</div>
+      <div id="spd" class="box-val">0</div>
+      <div class="box-unit">KM/H</div>
+      <div class="box-hint">próg <span id="thr-hint">90</span></div>
+    </div>
+    <div class="box">
+      <div class="box-label">Czas przekroczenia</div>
+      <div id="timer" class="box-val">00:00</div>
+      <div class="box-unit">MM:SS</div>
+      <div id="bcd" class="box-hint">–</div>
+    </div>
+  </div>
+
+  <div id="pending-strip" class="pending-strip">
+    <div class="pending-label">⏳ WERYFIKACJA</div>
+    <div id="pending-cd" class="pending-cd">2s</div>
+  </div>
+
+  <div id="strip" class="strip">
+    <div class="strip-l">⚠ PRZEKROCZENIE</div>
+    <div id="s-over" class="strip-over">+0</div>
+    <div id="s-beep" class="strip-beep">sygnał za 10s</div>
+  </div>
+
+  <div class="hist-wrap">
+    <div class="hist-title">Historia przekroczeń</div>
+    <div id="hist" class="hist-list"><div class="hist-empty">Brak przekroczeń</div></div>
+  </div>
+
+  <div class="botbar">
+    <button class="btn btn-rst" onclick="resetAll()">WYCZYŚĆ HISTORIĘ</button>
+  </div>
+</div>
+
+<script>
+// ── AUDIO ──
+let actx=null;
+function ac(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();return actx;}
+
+function beepN(n,freq,type){
+  try{
+    const c=ac();
+    for(let i=0;i<n;i++){
+      const o=i*0.22,os=c.createOscillator(),g=c.createGain();
+      os.connect(g);g.connect(c.destination);
+      os.type=type||'sine';os.frequency.value=freq||880;
+      g.gain.setValueAtTime(0.4,c.currentTime+o);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+o+0.15);
+      os.start(c.currentTime+o);os.stop(c.currentTime+o+0.16);
+    }
+  }catch(e){}
+}
+
+function beepAlert(){
+  try{
+    const c=ac();
+    [0,0.22].forEach(o=>{
+      const os=c.createOscillator(),g=c.createGain();
+      os.connect(g);g.connect(c.destination);
+      os.type='square';os.frequency.value=1100;
+      g.gain.setValueAtTime(0.45,c.currentTime+o);
+      g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+o+0.15);
+      os.start(c.currentTime+o);os.stop(c.currentTime+o+0.16);
+    });
+  }catch(e){}
+}
+
+function beepEnd(){
+  try{
+    const c=ac();
+    const os=c.createOscillator(),g=c.createGain();
+    os.connect(g);g.connect(c.destination);os.type='sine';
+    os.frequency.setValueAtTime(660,c.currentTime);
+    os.frequency.linearRampToValueAtTime(330,c.currentTime+0.4);
+    g.gain.setValueAtTime(0.3,c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+0.4);
+    os.start(c.currentTime);os.stop(c.currentTime+0.41);
+  }catch(e){}
+}
+
+// 4 alarm sounds
+function playAlarmSound(idx){
+  try{
+    const c=ac();
+    const t=c.currentTime;
+    if(idx===0){
+      // Syrena — rosnąca+opadająca
+      const os=c.createOscillator(),g=c.createGain();
+      os.connect(g);g.connect(c.destination);os.type='sawtooth';
+      os.frequency.setValueAtTime(400,t);os.frequency.linearRampToValueAtTime(900,t+0.4);
+      os.frequency.linearRampToValueAtTime(400,t+0.8);
+      g.gain.setValueAtTime(0.5,t);g.gain.setValueAtTime(0.5,t+0.75);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.85);
+      os.start(t);os.stop(t+0.86);
+    } else if(idx===1){
+      // Dzwonek — trzy tony
+      [0,0.25,0.5].forEach((o,i)=>{
+        const freqs=[1047,1319,1047];
+        const os=c.createOscillator(),g=c.createGain();
+        os.connect(g);g.connect(c.destination);os.type='sine';
+        os.frequency.value=freqs[i];
+        g.gain.setValueAtTime(0.5,t+o);
+        g.gain.exponentialRampToValueAtTime(0.001,t+o+0.2);
+        os.start(t+o);os.stop(t+o+0.21);
+      });
+    } else if(idx===2){
+      // Ti-Du — dwa tony naprzemiennie
+      [[0,800],[0.2,500],[0.4,800],[0.6,500]].forEach(([o,f])=>{
+        const os=c.createOscillator(),g=c.createGain();
+        os.connect(g);g.connect(c.destination);os.type='square';
+        os.frequency.value=f;
+        g.gain.setValueAtTime(0.4,t+o);
+        g.gain.exponentialRampToValueAtTime(0.001,t+o+0.18);
+        os.start(t+o);os.stop(t+o+0.19);
+      });
+    } else if(idx===3){
+      // Puls — szybkie piknięcia
+      [0,0.15,0.3,0.45].forEach(o=>{
+        const os=c.createOscillator(),g=c.createGain();
+        os.connect(g);g.connect(c.destination);os.type='sine';
+        os.frequency.value=1200;
+        g.gain.setValueAtTime(0.5,t+o);
+        g.gain.exponentialRampToValueAtTime(0.001,t+o+0.1);
+        os.start(t+o);os.stop(t+o+0.11);
+      });
+    }
+  }catch(e){}
+}
+
+let aReady=false;
+function unlockA(){if(aReady)return;aReady=true;try{ac().resume();}catch(e){}}
+document.addEventListener('touchstart',unlockA,{once:true});
+document.addEventListener('click',unlockA,{once:true});
+
+// ── SETTINGS STATE ──
+const DEF={
+  afOn:true, afSecs:2,
+  atOn:false, atSecs:50,
+  sfOn:false, sfSecs:50,
+  torOn:false, torSecs:50,
+  sync:false, syncSecs:50,
+  sound:0,
+  THR:90
+};
+let sets={...DEF};
+
+function loadSets(){
+  try{
+    const s=localStorage.getItem('sg_sets');
+    if(s)sets={...DEF,...JSON.parse(s)};
+  }catch(e){}
+  applySettings();
+}
+
+function saveSets(){
+  sets.afOn=document.getElementById('tog-af').checked;
+  sets.atOn=document.getElementById('tog-at').checked;
+  sets.sfOn=document.getElementById('tog-sf').checked;
+  sets.torOn=document.getElementById('tog-tor').checked;
+  sets.sync=document.getElementById('tog-sync').checked;
+  try{localStorage.setItem('sg_sets',JSON.stringify(sets));}catch(e){}
+}
+
+function applySettings(){
+  document.getElementById('tog-af').checked=sets.afOn;
+  document.getElementById('tog-at').checked=sets.atOn;
+  document.getElementById('tog-sf').checked=sets.sfOn;
+  document.getElementById('tog-tor').checked=sets.torOn;
+  document.getElementById('tog-sync').checked=sets.sync;
+  document.getElementById('af-val').textContent=sets.afSecs;
+  document.getElementById('at-val').textContent=sets.atSecs;
+  document.getElementById('sf-val').textContent=sets.sfSecs;
+  document.getElementById('tor-val').textContent=sets.torSecs;
+  document.getElementById('sync-val').textContent=sets.syncSecs;
+  THR=sets.THR||90;
+  updateThrDisplay();
+  document.querySelectorAll('.sound-btn').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.snd)===sets.sound));
+  document.getElementById('sync-row').style.display=sets.sync?'block':'none';
+}
+
+function openSettings(){document.getElementById('settings').classList.add('open');}
+function closeSettings(){document.getElementById('settings').classList.remove('open');saveSets();}
+
+function adjAf(d){sets.afSecs=Math.max(1,Math.min(10,sets.afSecs+d));document.getElementById('af-val').textContent=sets.afSecs;saveSets();}
+function adjAt(d){sets.atSecs=Math.max(5,Math.min(300,sets.atSecs+d));document.getElementById('at-val').textContent=sets.atSecs;saveSets();}
+function adjSf(d){sets.sfSecs=Math.max(5,Math.min(300,sets.sfSecs+d));document.getElementById('sf-val').textContent=sets.sfSecs;saveSets();}
+function adjTor(d){sets.torSecs=Math.max(5,Math.min(300,sets.torSecs+d));document.getElementById('tor-val').textContent=sets.torSecs;saveSets();}
+function adjSync(d){
+  sets.syncSecs=Math.max(5,Math.min(300,sets.syncSecs+d));
+  document.getElementById('sync-val').textContent=sets.syncSecs;
+  // propagate to all three
+  sets.atSecs=sets.syncSecs;sets.sfSecs=sets.syncSecs;sets.torSecs=sets.syncSecs;
+  document.getElementById('at-val').textContent=sets.syncSecs;
+  document.getElementById('sf-val').textContent=sets.syncSecs;
+  document.getElementById('tor-val').textContent=sets.syncSecs;
+  saveSets();
+}
+function onSyncChange(){
+  sets.sync=document.getElementById('tog-sync').checked;
+  document.getElementById('sync-row').style.display=sets.sync?'block':'none';
+  if(sets.sync){
+    // sync all to current syncSecs
+    sets.atSecs=sets.syncSecs;sets.sfSecs=sets.syncSecs;sets.torSecs=sets.syncSecs;
+    document.getElementById('at-val').textContent=sets.syncSecs;
+    document.getElementById('sf-val').textContent=sets.syncSecs;
+    document.getElementById('tor-val').textContent=sets.syncSecs;
+  }
+  saveSets();
+}
+function selSound(idx){
+  sets.sound=idx;
+  document.querySelectorAll('.sound-btn').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.snd)===idx));
+  playAlarmSound(idx); // preview
+  saveSets();
+}
+
+// ── THRESHOLD ──
+let THR=90;
+function adjThr(d){THR=Math.max(50,Math.min(130,THR+d));sets.THR=THR;updateThrDisplay();saveSets();}
+function setThrManual(){
+  const v=parseInt(document.getElementById('thr-inp').value);
+  if(!isNaN(v)&&v>=50&&v<=130){THR=v;sets.THR=THR;updateThrDisplay();document.getElementById('thr-inp').value='';saveSets();}
+  else alert('Wpisz wartość między 50 a 130 km/h');
+}
+function updateThrDisplay(){
+  document.getElementById('thr-disp').textContent=THR;
+  document.getElementById('thr-hint').textContent=THR;
+}
+
+// ── STATE ──
+let watchId=null;
+let vActive=false,vStart=null;
+let vDisplayInt=null,tickWorker=null,tickSecs=0;
+let alarmActive=false,flashActive=false,torchActive=false;
+let alarmInt=null;
+let pendingTimer=null,pendingCd=0;
+let torchStream=null,torchInt=null;
+const hist=[];
+let wl=null;
+
+// ── DOM ──
+const splashEl=document.getElementById('splash');
+const splashMsg=document.getElementById('splash-msg');
+const splashSpinner=document.getElementById('splash-spinner');
+const splashBtn=document.getElementById('splash-btn');
+const badgeEl=document.getElementById('badge');
+const spdEl=document.getElementById('spd');
+const timerEl=document.getElementById('timer');
+const bcdEl=document.getElementById('bcd');
+const stripEl=document.getElementById('strip');
+const sOverEl=document.getElementById('s-over');
+const sBeepEl=document.getElementById('s-beep');
+const pendingStripEl=document.getElementById('pending-strip');
+const pendingCdEl=document.getElementById('pending-cd');
+const histEl=document.getElementById('hist');
+const flashOverlay=document.getElementById('flash-overlay');
+
+// ── GPS ──
+function startGPS(){
+  if(!navigator.geolocation){showSplashError('Przeglądarka nie obsługuje GPS.');return;}
+  splashMsg.textContent='Łączenie z GPS...';
+  splashSpinner.style.display='block';
+  splashBtn.style.display='none';
+  watchId=navigator.geolocation.watchPosition(
+    p=>{
+      if(!splashEl.classList.contains('hide')){
+        splashEl.classList.add('hide');
+        setTimeout(()=>splashEl.style.display='none',400);
+        setBadge('on');unlockA();
+      }
+      const s=p.coords.speed!=null?p.coords.speed*3.6:0;
+      updateSpd(Math.round(s));
+    },
+    e=>{
+      if(e.code===1)showSplashError('Brak dostępu do GPS.\nChrome → Ustawienia witryn → Lokalizacja → Zezwól, odśwież stronę.');
+      else splashMsg.textContent='Szukanie sygnału GPS...';
+    },
+    {enableHighAccuracy:true,maximumAge:0,timeout:10000}
+  );
+}
+function showSplashError(msg){splashMsg.textContent=msg;splashSpinner.style.display='none';splashBtn.style.display='block';setBadge('err');}
+function retryGPS(){if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;}startGPS();}
+function setBadge(s){
+  badgeEl.className='badge'+(s==='on'?' on':s==='err'?' err':'');
+  badgeEl.textContent=s==='on'?'GPS OK':s==='err'?'BRAK GPS':'ŁĄCZENIE';
+}
+
+// ── SPEED ──
+function updateSpd(spd){
+  spdEl.textContent=spd;
+  spdEl.className='box-val'+(spd>THR?' d':spd>(THR-15)?' w':'');
+  if(spd>THR){
+    sOverEl.textContent='+'+(spd-THR)+' km/h';
+    if(!vActive&&!pendingTimer){
+      // Start timer immediately regardless of anti-fake setting
+      realViolationStart=Date.now();
+      vStart=realViolationStart;
+      // Start display timer right away
+      if(!vDisplayInt){
+        vDisplayInt=setInterval(()=>{
+          const e=Math.floor((Date.now()-vStart)/1000);
+          timerEl.textContent=fmt(e);
+          timerEl.className='box-val d';
+        },200);
+      }
+      if(sets.afOn)startPending();
+      else startV();
+    }
+  }else{
+    if(pendingTimer)cancelPending();
+    if(vActive)endV();
+  }
+}
+
+// ── ANTI-FAKE ──
+let realViolationStart=null; // records actual moment of exceeding threshold
+function startPending(){
+  realViolationStart=Date.now(); // start counting from NOW, not after delay
+  pendingCd=sets.afSecs;
+  pendingStripEl.classList.add('on');
+  pendingCdEl.textContent=pendingCd+'s';
+  pendingTimer=setInterval(()=>{
+    pendingCd--;
+    pendingCdEl.textContent=pendingCd+'s';
+    if(pendingCd<=0){clearInterval(pendingTimer);pendingTimer=null;pendingStripEl.classList.remove('on');startV();}
+  },1000);
+}
+function cancelPending(){
+  clearInterval(pendingTimer);pendingTimer=null;
+  pendingStripEl.classList.remove('on');
+  // Also stop display timer since violation was cancelled
+  clearInterval(vDisplayInt);vDisplayInt=null;
+  timerEl.textContent='00:00';timerEl.className='box-val';
+  realViolationStart=null;vStart=null;
+}
+
+// ── VIOLATION ──
+function startV(){
+  vActive=true;
+  // vStart already set in updateSpd, keep it
+  if(!vStart)vStart=Date.now();
+  tickSecs=Math.floor((Date.now()-vStart)/1000);
+  alarmActive=false;flashActive=false;torchActive=false;
+  stripEl.classList.add('on');
+  beepAlert();
+  if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
+  document.body.classList.add('flashing');
+  reqWL();
+  // vDisplayInt already running, don't restart it
+  alarmActive=false;flashActive=false;torchActive=false;
+  stripEl.classList.add('on');
+  beepAlert();
+  if(navigator.vibrate)navigator.vibrate([300,100,300,100,300]);
+  document.body.classList.add('flashing');
+  reqWL();
+
+  vDisplayInt=setInterval(()=>{
+    const e=Math.floor((Date.now()-vStart)/1000);
+    timerEl.textContent=fmt(e);
+    timerEl.className='box-val d';
+  },200);
+
+  tickWorker=setInterval(()=>{
+    if(!vActive)return;
+    tickSecs++;
+
+    // Countdown to next 10s beep
+    const cd=10-(tickSecs%10);
+    bcdEl.textContent='sygnał za '+cd+'s';
+    bcdEl.className='box-hint'+(cd<=3?' soon':'');
+    sBeepEl.textContent='sygnał za '+cd+'s';
+    sBeepEl.className='strip-beep'+(cd<=3?' soon':'');
+    if(tickSecs%10===0){
+      const n=tickSecs/10;
+      beepN(n,880,'sine');
+      if(navigator.vibrate)navigator.vibrate(Array(n).fill([80,80]).flat());
+    }
+
+    // Alarm sound
+    if(sets.atOn&&!alarmActive&&tickSecs>=sets.atSecs){
+      alarmActive=true;
+      playAlarmSound(sets.sound);
+      alarmInt=setInterval(()=>{if(vActive)playAlarmSound(sets.sound);},2000);
+    }
+
+    // Screen flash
+    if(sets.sfOn&&!flashActive&&tickSecs>=sets.sfSecs){
+      flashActive=true;
+      flashOverlay.classList.add('alarm');
+    }
+
+    // Torch
+    if(sets.torOn&&!torchActive&&tickSecs>=sets.torSecs){
+      torchActive=true;
+      startTorch();
+    }
+  },1000);
+}
+
+function endV(){
+  if(!vActive)return;
+  vActive=false;
+  const elapsed=Math.floor((Date.now()-vStart)/1000);
+  clearInterval(vDisplayInt);vDisplayInt=null;
+  clearInterval(tickWorker);tickWorker=null;
+  clearInterval(alarmInt);alarmInt=null;
+  alarmActive=false;flashActive=false;torchActive=false;
+  vStart=null;realViolationStart=null;
+  beepEnd();
+  document.body.classList.remove('flashing');
+  flashOverlay.classList.remove('alarm');
+  stopTorch();
+  stripEl.classList.remove('on');
+  timerEl.textContent='00:00';timerEl.className='box-val';
+  bcdEl.textContent='–';bcdEl.className='box-hint';
+  sBeepEl.textContent='sygnał za 10s';sBeepEl.className='strip-beep';
+  hist.unshift({spd:parseInt(spdEl.textContent)||0,thr:THR,dur:elapsed,time:new Date().toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})});
+  renderH();
+}
+
+// ── TORCH ──
+let torchStream=null,torchInt=null,torchTrack=null;
+
+async function startTorch(){
+  try{
+    if(torchStream)stopTorch(); // cleanup first
+    torchStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{exact:'environment'},width:1,height:1}
+    });
+    torchTrack=torchStream.getVideoTracks()[0];
+    // Check if torch is supported
+    const caps=torchTrack.getCapabilities();
+    if(!caps.torch){
+      console.warn('Torch not supported on this device');
+      stopTorch();return;
+    }
+    let on=true;
+    // Turn on immediately
+    await torchTrack.applyConstraints({advanced:[{torch:true}]});
+    torchInt=setInterval(async()=>{
+      if(!torchActive){stopTorch();return;}
+      on=!on;
+      try{await torchTrack.applyConstraints({advanced:[{torch:on}]});}catch(e){}
+    },400);
+  }catch(e){
+    console.warn('Torch error:',e);
+    torchActive=false;
+  }
+}
+
+function stopTorch(){
+  clearInterval(torchInt);torchInt=null;
+  if(torchTrack){
+    try{torchTrack.applyConstraints({advanced:[{torch:false}]});}catch(e){}
+    torchTrack.stop();torchTrack=null;
+  }
+  if(torchStream){
+    torchStream.getTracks().forEach(t=>t.stop());
+    torchStream=null;
+  }
+}
+
+function renderH(){
+  if(!hist.length){histEl.innerHTML='<div class="hist-empty">Brak przekroczeń</div>';return;}
+  histEl.innerHTML=hist.slice(0,15).map(h=>`
+    <div class="hist-item">
+      <div><div class="hi-s">${h.spd} km/h</div><div class="hi-t">${h.time} · próg ${h.thr}</div></div>
+      <div class="hi-d">${fmt(h.dur)}</div>
+    </div>`).join('');
+}
+function resetAll(){
+  hist.length=0;timerEl.textContent='00:00';timerEl.className='box-val';
+  bcdEl.textContent='–';spdEl.textContent='0';spdEl.className='box-val';renderH();
+}
+function fmt(s){return pad(Math.floor(s/60))+':'+pad(s%60);}
+function pad(n){return String(n).padStart(2,'0');}
+async function reqWL(){try{if('wakeLock'in navigator)wl=await navigator.wakeLock.request('screen');}catch(e){}}
+document.addEventListener('visibilitychange',async()=>{if(wl&&document.visibilityState==='visible'&&vActive)await reqWL();});
+
+loadSets();
+startGPS();
+if('serviceWorker'in navigator){navigator.serviceWorker.register('sw.js').catch(e=>console.warn('SW:',e));}
+</script>
+</body>
+</html>
